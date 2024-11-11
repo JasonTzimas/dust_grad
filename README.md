@@ -5,8 +5,20 @@
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/username/project/actions)
 
 ## Description
-This repository implements a basic AutoGrad Engine purely in python without utilizing any 3rd party frameworks such as numpy. It works on a scalar level, using the class Value, which is of the following form:
+This repository implements a basic AutoGrad Engine purely in python without utilizing any 3rd party frameworks such as numpy. It works on a scalar level, using the class Value.
 
+
+## Table of Contents
+- [The _Value_ object](#the-value-object)
+- [The Computational Graph and topological ordering](#the-computational-graph-and-topological-ordering)
+- [The _Value.backward()_ function](#the-value.backward()-function)
+- [The _backward\_func_ attribute of Value objects](#the-backward-func-attribute-of-value-objects)
+
+- [License](#license)
+
+## The _Value_ object
+
+The Value object has the following structure
 ``` python
 class Value(object):
     '''
@@ -16,102 +28,25 @@ class Value(object):
         output:
             - Value object with value = x
     '''
-    def __init__(self, x:Union[float, int, str], children=[], requires_grad=False):
+    def __init__(self, x, children=[], requires_grad=False):
         self.children = children
         self.backward_func = None
         self.grad = 0.0
         self.requires_grad = requires_grad
-        self.valid_dtypes = [float, int, Value, str]
-        assert type(x) in self.valid_dtypes, "Invalid input dtype {}. Should be in: {}".format(type(x), [repr(dtype) for dtype in self.valid_dtypes])
-        if type(x) in [int, str]:
-            try:
-                x = float(x)
-            except:
-                raise Exception("str object cannot be converted to either float or int")
-            self.val = x
-        elif type(x) == Value:
-            self.val = x.val
-            del x
-        else:
-            self.val = x
 
+    # Returns Value object's float value
     def value(self):
         return self.val
     
-    def __repr__(self):
-        return "Value(data={})".format(self.val)
-
-    def __str__(self):
-        return "Value(data={})".format(self.val)
-    
+    ## Operator overloading for all Python basic operators
+    ## e.g.
     def __neg__(self):
         # Return a new Value instance with the negated value
         return Value(-self.val, [self])
     
-    def __add__(self, other):
-        if isinstance(other, type(self)):
-            value = Value(self.val + other.val, [self, other])
-        else:
-            try: 
-                value = Value(self.val + other, [self, other])
-            except:
-                raise Exception("{} is an invalid dtype for addition with {}".format(type(other), type(self)))
-        
-        value.backward_func = backward_add()
-        return value
-
-    def __radd__(self, other):
-    # Call __add__ to handle the reverse addition
-        return self.__add__(other)
-
-    def __sub__(self, other):
-        if isinstance(other, type(self)):
-            value = Value(self.val - other.val, [self, other])
-        else:
-            try: 
-                value = Value(self.val - other, [self, other])
-            except:
-                raise Exception("{} is an invalid dtype for addition with {}".format(type(other), type(self)))
-        
-        value.backward_func = backward_sub()
-        return value
-
-    def __rsub__(self, other):
-    # Call __add__ to handle the reverse addition
-        return self.__sub__(other)
-                            
-    def __mul__(self, other):
-        if isinstance(other, type(self)):
-            value = Value(self.val * other.val, [self, other])
-            value.backward_func = backward_mul(cache=[self.val, other.val])
-        else:
-            try: 
-                value = Value(self.val * other, [self, other])
-                value.backward_func = backward_mul(cache=[self.val, other])
-            except:
-                raise Exception("{} is an invalid dtype for addition with {}".format(type(other), type(self)))
-        return value
-    
-    def __rmul__(self, other):
-    # Call __add__ to handle the reverse addition
-        return self.__mul__(other)
-    
-    def __truediv__(self, other):
-        if isinstance(other, type(self)):
-            value = Value(self.val / other.val, [self, other])
-            value.backward_func = backward_div(cache=[self.val, other.val])
-        else:
-            try: 
-                value = Value(self.val / other, [self, other])
-                value.backward_func = backward_div(cache=[self.val, other])
-            except:
-                raise Exception("{} is an invalid dtype for addition with {}".format(type(other), type(self)))
-        return value
-
-    def __rtruediv__(self, other):
-    # Call __add__ to handle the reverse addition
-        return self.__div__(other)
-    
+    # backward first creates a list of topologically ordered elements of the computational graph
+    # Then for each of this nodes calls the backward_func 
+    # to fill in the respective gradients of the children
     def backward(self):
         self.grad = 1.0
         # -- Get topological ordering with respect to self
@@ -129,27 +64,116 @@ class Value(object):
 
 ```
 
+Each value object has the following attributes:
+1. children: A Python List containing Value() objects that produce the parent Value() object when combined with an operator or function
+  E.g
+  <p align="center">
+  <img src="Images/rgb55.png" alt="Image description" width="300" height="300">
+  </p>
+2. backward_func: An object that receives a cache saving useful information from the forward pass and implements a backward(grad) call where it transmits the receive grad to the children nodes
+
+3. grad: The accumulated gradient for the particular scalar Value() object
+
+4. requires_grad: Whether or not the particular node requires gradient accumulation
+
+The value object also has the following functions:
+
+1. All operator overloading functions for all primitive python operators such as +, -, * etc.
+
+2. value(self): Which returns the current value of the Value() object in a Python float type
+
+3. backward(self): Which first extracts a topologically ordered list of nodes of the computational graph and then iterates over them to accumulate gradients for all the nodes of the graph
+
+## The Computational Graph and topological ordering
+
+Each backward() call of a given Value() object first creates a topologically ordered list of the given computational graph. It does so to prevent another Value() node from calling its backward_func when It hasn't accumulated all the gradients from all the possible paths leading to the particular node. Let us demonstrate this failure case with an example.
+
+Assume you have constructed the following computational graph:
+
+<p align="center">
+  <img src="Images/rgb55.png" alt="Image description" width="300" height="300">
+</p>
+
+If you don't first sort the nodes in a Topologically order way, it could be the case that the traversal of the graph in the backward() call would be of the following order:
+
+``` python
+order = [Node5, Node2, Node4, Node3, Node1]
+```
+
+However this has disastrous results since _Node2_ would call its _backward\_func_ even though gradients from Nodes 3 and 4 have not been accumulated.
+
+Topologically ordering the above graph means that each pair of nodes from the ordered list respects its order, leading to the following list of objects:
+
+``` python
+order = [Node5, Node4, Node3, Node2, Node1]
+```
 
 
+## The _Value.backward()_ function
 
-## Table of Contents
-- [Part A](#Part_A)
-  - [Frame Detection](#frame-detection)
-  - [Template Matching and Normalized Cross Correlation (NCC)](#template-matching-and-normalized-cross-correlation-ncc)
-  - [Results](#results)
-  - [Installation](#installation)
-  - [Execution](#execution)
-- [Part B](#part-b)
-  - [An Input Sample](#an-input-sample)
-  - [Otsu's thresholding](#otsus-thresholding)
-  - [Morphological Filtering](#morphological-filtering)
-  - [Connected Components](#connected-components)
-  - [Hue moments, dominant orientations and Centroids](#hue-moments-dominant-orientations-and-centroids)
-- [License](#license)
+The backward() function of a Value() object computes the gradients of all the Value() object nodes in the opposite direction of the Graph.
+It does so by first creating a topologically ordered list of the Nodes at hand and then traverses these nodes in the correct order and calls the backward_func of these nodes to accumulate gradients.
 
-## Part_A
+Namely:
+``` python
+topo = list(reversed(get_topological_order(self)))
+```
 
-### Frame Detection
+Creates the list
+
+``` python
+for node in topo:
+            if isinstance(node, type(self)):
+                if node.backward_func is not None:
+                    grad = node.grad
+                    grads = node.backward_func(grad)
+                    for i, child in enumerate(node.children):
+                        if isinstance(child, type(self)):
+                            child.grad += grads[i]
+                else:
+                    continue
+```
+Traverses the list and accumulates gradients.
+
+In more detail:
+``` python
+for node in topo:
+```
+
+Iterates through the topo list
+
+``` python
+if isinstance(node, type(self)):
+```
+
+Checks if the current node is of type Value() (Could be the case that leaf nodes are simple floats or ints, this is allowed in our API)
+
+``` python
+if node.backward_func is not None:
+```
+
+Checks if the current Node has the backward_func attribute implemented (It is not implemented for leaf nodes)
+``` python
+grad = node.grad
+grads = node.backward_func(grad)
+```
+Gets the current grad of the Node we are in and calculates the children grads by passing it to the backward_func()
+
+``` python
+for i, child in enumerate(node.children):
+    if isinstance(child, type(self)):
+        child.grad += grads[i]
+```
+
+Iterates through the children list and accumulates gradients to each child by means of an inplace += operation
+
+``` python
+else:
+    continue
+```
+
+If the Value() object does not have backwawrd_func implemented (is a leaf node), do nothing.
+
 
 The input images are of the following form:
 
