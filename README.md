@@ -13,6 +13,9 @@ This repository implements a basic AutoGrad Engine purely in python without util
 - [The Computational Graph and topological ordering](#the-computational-graph-and-topological-ordering)
 - [The _Value.backward()_ function](#the-value.backward()-function)
 - [The _backward\_func_ attribute of Value objects](#the-backward-func-attribute-of-value-objects)
+- [The Neuron object](#the-neuron()-object)
+- [The Layer object](#the-layer-object)
+- [The MLP object](#the-mlp-object)
 - [Classification Example](#classification-example)
 - [Regression Example](#regression-example)
 
@@ -249,6 +252,107 @@ This allows us to call the backward_add object  as:
 ``` python
 backward_add(grad)
 ```
+## The Neuron object
+
+The Neuron object has the following structure
+
+<p align="center">
+  <img src="Images/Neuron.jpg" alt="Image description"  height="300">
+</p>
+
+``` python
+class Neuron(object):
+    def __init__(self, d_in):
+        self.d_in = d_in
+        self.weights = [Value(random.uniform(-1, 1)) for i in range(self.d_in)]
+        self.bias = Value(0.0)
+        self.params = [weight for weight in self.weights] + [self.bias]
+
+    def __call__(self, x):
+        assert len(x) == len(self.weights)
+        out = sum([x[i] * self.weights[i] for i in range(self.d_in)]) + self.bias
+        out = tanh(out)
+
+        return out
+    def zero_grad(self):
+        for param in self.params:
+            param.grad = 0.0
+
+    def get_number_of_params(self):
+        return len(self.params)
+
+```
+It is mainly a container of two Value() objects, the weight and bias.
+
+The call function returns the output of the expression $y = tanh( a \cdot x + b)$
+
+Zero grad zeros out the gradients of the weight and bias parameters
+
+## The Layer object
+
+The Layer object contains a list of Neuron objects
+
+<p align="center">
+  <img src="Images/Layer.jpg" alt="Image description"  height="300">
+</p>
+
+``` python
+class Layer(object):
+    def __init__(self, d_in, d_out):
+        self.d_in = d_in
+        self.d_out = d_out
+        self.neurons = [Neuron(d_in) for i in range(d_out)]
+        self.params = [param for neuron in self.neurons for param in neuron.params]
+    def __call__(self, x):
+        assert len(x) == self.d_in
+        out = [neuron(x) for neuron in self.neurons]
+
+        return out
+    def zero_grad(self):
+        for param in self.params:
+            param.grad = 0.0
+    def get_number_of_params(self):
+        return len(self.params)
+```
+
+Each scalar input passes through all the Neurons of the Layer object
+
+## The MLP object
+
+<p align="center">
+  <img src="Images/MLP.jpg" alt="Image description"  height="300">
+</p>
+
+``` python
+class MLP(object):
+    def __init__(self, d_in, d_out, intermediate):
+        self.d_in = d_in
+        self.d_out = d_out
+        self.depth = len(intermediate) + 2
+        self.intermediate = intermediate
+        self.layers = [Layer(self.d_in, self.intermediate[0])]
+        for i in range(len(intermediate) - 1):
+            self.layers.append(Layer(self.intermediate[i], self.intermediate[i+1]))
+        self.layers.append(Layer(self.intermediate[-1], self.d_out))
+        self.params = [param for layer in self.layers for param in layer.params]
+
+    def __call__(self, x):
+        out = x
+        assert len(x) == self.d_in
+        for layer in self.layers:
+            out = layer(out)
+
+        return out
+    
+    def zero_grad(self):
+        for param in self.params:
+            param.grad = 0.0
+    def get_number_of_params(self):
+        return len(self.params)
+```
+
+In a similar manner, the MLP object is a collection of Layer objects
+
 
 ## Classification Example
 
@@ -257,7 +361,7 @@ The notebook _test\_grad\_classification.ipynb_ implements a simple 2D training 
 The resulting Decision Boundary together with the samples is the following:
 
 <p align="center">
-  <img src="Images/topo.jpg" alt="Image description"  height="300">
+  <img src="Images/classification.jpg" alt="Image description"  height="300">
 </p>
 
 
@@ -268,7 +372,7 @@ The notebook _test\_grad\_regression.ipynb_ implements a simple 1D training loop
 The resulting Predicted Regression Line and the corresponding samples are as follows:
 
 <p align="center">
-  <img src="Images/topo.jpg" alt="Image description"  height="300">
+  <img src="Images/regression.jpg" alt="Image description"  height="300">
 </p>
 
 
