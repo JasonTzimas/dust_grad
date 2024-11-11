@@ -68,7 +68,7 @@ Each value object has the following attributes:
 1. children: A Python List containing Value() objects that produce the parent Value() object when combined with an operator or function
   E.g
   <p align="center">
-  <img src="Images/children.jpg" alt="Image description" width="300" height="300">
+  <img src="Images/children.jpg" alt="Image description" height="300">
   </p>
 2. backward_func: An object that receives a cache saving useful information from the forward pass and implements a backward(grad) call where it transmits the receive grad to the children nodes
 
@@ -91,7 +91,7 @@ Each backward() call of a given Value() object first creates a topologically ord
 Assume you have constructed the following computational graph:
 
 <p align="center">
-  <img src="Images/topo.jpg" alt="Image description" width="300" height="300">
+  <img src="Images/topo.jpg" alt="Image description"  height="300">
 </p>
 
 If you don't first sort the nodes in a Topologically order way, it could be the case that the traversal of the graph in the backward() call would be of the following order:
