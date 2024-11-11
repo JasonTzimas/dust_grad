@@ -1,19 +1,135 @@
-# Image Colorization and Morphological filtering based Instance Segmentation
+# Dust Autograd Engine
 
-<p align="center">
-  <img src="Images/OpenCV_logo_no_text.png" alt="Image description" width="300" height="300">
-</p>
 
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/username/project/actions)
 
 ## Description
-1. **_PartA_:**
-  Educational Code that implements Image colorization from scratch by first cropping 3 images of different channels from a single image, aligns them using Normalized Cross Correlation (NCC) and then combines them in different permutations to give the final RGB Image.
+This repository implements a basic AutoGrad Engine purely in python without utilizing any 3rd party frameworks such as numpy. It works on a scalar level, using the class Value, which is of the following form:
 
-2. **_PartB_:**
-  Educational Code that implements Instance Segmentations of multiple well separated objects within an image. The first part of the process is to perform [Otsu's thresholding](https://en.wikipedia.org/wiki/Otsu%27s_method) to get a first segmentation of the objects. Then, morphological filtering is performed to fill any holes/gaps and refine edges. Finally, a Connected-Components Algorithm returns the separated object instance masks.
- 
+``` python
+class Value(object):
+    '''
+    Value Object:
+        arguments:
+            - x: input data of type int or float
+        output:
+            - Value object with value = x
+    '''
+    def __init__(self, x:Union[float, int, str], children=[], requires_grad=False):
+        self.children = children
+        self.backward_func = None
+        self.grad = 0.0
+        self.requires_grad = requires_grad
+        self.valid_dtypes = [float, int, Value, str]
+        assert type(x) in self.valid_dtypes, "Invalid input dtype {}. Should be in: {}".format(type(x), [repr(dtype) for dtype in self.valid_dtypes])
+        if type(x) in [int, str]:
+            try:
+                x = float(x)
+            except:
+                raise Exception("str object cannot be converted to either float or int")
+            self.val = x
+        elif type(x) == Value:
+            self.val = x.val
+            del x
+        else:
+            self.val = x
+
+    def value(self):
+        return self.val
+    
+    def __repr__(self):
+        return "Value(data={})".format(self.val)
+
+    def __str__(self):
+        return "Value(data={})".format(self.val)
+    
+    def __neg__(self):
+        # Return a new Value instance with the negated value
+        return Value(-self.val, [self])
+    
+    def __add__(self, other):
+        if isinstance(other, type(self)):
+            value = Value(self.val + other.val, [self, other])
+        else:
+            try: 
+                value = Value(self.val + other, [self, other])
+            except:
+                raise Exception("{} is an invalid dtype for addition with {}".format(type(other), type(self)))
+        
+        value.backward_func = backward_add()
+        return value
+
+    def __radd__(self, other):
+    # Call __add__ to handle the reverse addition
+        return self.__add__(other)
+
+    def __sub__(self, other):
+        if isinstance(other, type(self)):
+            value = Value(self.val - other.val, [self, other])
+        else:
+            try: 
+                value = Value(self.val - other, [self, other])
+            except:
+                raise Exception("{} is an invalid dtype for addition with {}".format(type(other), type(self)))
+        
+        value.backward_func = backward_sub()
+        return value
+
+    def __rsub__(self, other):
+    # Call __add__ to handle the reverse addition
+        return self.__sub__(other)
+                            
+    def __mul__(self, other):
+        if isinstance(other, type(self)):
+            value = Value(self.val * other.val, [self, other])
+            value.backward_func = backward_mul(cache=[self.val, other.val])
+        else:
+            try: 
+                value = Value(self.val * other, [self, other])
+                value.backward_func = backward_mul(cache=[self.val, other])
+            except:
+                raise Exception("{} is an invalid dtype for addition with {}".format(type(other), type(self)))
+        return value
+    
+    def __rmul__(self, other):
+    # Call __add__ to handle the reverse addition
+        return self.__mul__(other)
+    
+    def __truediv__(self, other):
+        if isinstance(other, type(self)):
+            value = Value(self.val / other.val, [self, other])
+            value.backward_func = backward_div(cache=[self.val, other.val])
+        else:
+            try: 
+                value = Value(self.val / other, [self, other])
+                value.backward_func = backward_div(cache=[self.val, other])
+            except:
+                raise Exception("{} is an invalid dtype for addition with {}".format(type(other), type(self)))
+        return value
+
+    def __rtruediv__(self, other):
+    # Call __add__ to handle the reverse addition
+        return self.__div__(other)
+    
+    def backward(self):
+        self.grad = 1.0
+        # -- Get topological ordering with respect to self
+        topo = list(reversed(get_topological_order(self)))
+        for node in topo:
+            if isinstance(node, type(self)):
+                if node.backward_func is not None:
+                    grad = node.grad
+                    grads = node.backward_func(grad)
+                    for i, child in enumerate(node.children):
+                        if isinstance(child, type(self)):
+                            child.grad += grads[i]
+                else:
+                    continue
+
+```
+
+
 
 
 ## Table of Contents
