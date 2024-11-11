@@ -13,6 +13,8 @@ This repository implements a basic AutoGrad Engine purely in python without util
 - [The Computational Graph and topological ordering](#the-computational-graph-and-topological-ordering)
 - [The _Value.backward()_ function](#the-value.backward()-function)
 - [The _backward\_func_ attribute of Value objects](#the-backward-func-attribute-of-value-objects)
+- [Classification Example](#classification-example)
+- [Regression Example](#regression-example)
 
 - [License](#license)
 
@@ -247,5 +249,26 @@ This allows us to call the backward_add object  as:
 ``` python
 backward_add(grad)
 ```
+
+## Classification Example
+
+The notebook _test\_grad\_classification.ipynb_ implements a simple 2D training loop using the Dust Grad Module for classifying the Yin-Yang dataset. You can walk through it to see the implementation details by yourself and tune the hyperparameters to get better or worse results
+
+The resulting Decision Boundary together with the samples is the following:
+
+<p align="center">
+  <img src="Images/topo.jpg" alt="Image description"  height="300">
+</p>
+
+
+## Regression Example
+
+The notebook _test\_grad\_regression.ipynb_ implements a simple 1D training loop using the Dust Grad Module for regressing over a simple sin(x) function with the addition of noise. You can walk through it to see the implementation details by yourself and tune the hyperparameters to get better or worse results
+
+The resulting Predicted Regression Line and the corresponding samples are as follows:
+
+<p align="center">
+  <img src="Images/topo.jpg" alt="Image description"  height="300">
+</p>
 
 
